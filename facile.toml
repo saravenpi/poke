@@ -1,0 +1,7 @@
+name = "poke"
+summary = "Terminal Pokemon encounters, catching, pokedex, and economy"
+repo = "saravenpi/poke"
+branch = "main"
+build = "rust"
+srcSubdir = "."
+bin = "poke"

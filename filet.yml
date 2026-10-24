@@ -1,0 +1,27 @@
+ignore: [.git, node_modules, vendor, dist, build, target, testdata, .venv, __pycache__, data]
+
+extensions: [.rs, .sh]
+
+limits:
+  fileLines: 250
+  funcsPerFile: 8
+  lineLength: 120
+  params: 5
+  returns: 3
+  nesting: 4
+  complexity: 10
+  structFields: 14
+
+style:
+  banInlineComments: true
+  banTODO: true
+  requireDocComments: true
+  banGlobalMutable: true
+  banTrailingSpace: true
+
+treesitter:
+  enabled: true
+
+disabled: []
+
+failOn: error
