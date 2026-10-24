@@ -1,10 +1,2 @@
 [tools]
 rust = "latest"
-
-[facile]
-name = "poke"
-summary = "Terminal Pokemon encounters, catching, pokedex, and economy"
-repo = "saravenpi/poke"
-branch = "main"
-build = "rust"
-bin = "poke"
