@@ -30,7 +30,9 @@ pub fn save_state(state: &TrainerState) -> Result<(), String> {
         fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
     let data = serde_json::to_string_pretty(state).map_err(|e| e.to_string())?;
-    fs::write(&path, data).map_err(|e| e.to_string())
+    let tmp_path = path.with_extension("json.tmp");
+    fs::write(&tmp_path, data).map_err(|e| e.to_string())?;
+    fs::rename(&tmp_path, &path).map_err(|e| e.to_string())
 }
 
 /// Returns current Unix epoch timestamp in seconds.

@@ -36,8 +36,8 @@ pub fn consume_ball(inv: &mut Inventory, ball: BallType) -> bool {
 
 /// Computes the catch chance score using the authentic capture formula.
 pub fn calculate_catch_rate(enc: &Encounter, ball: BallType, base_rate: u16) -> f32 {
-    let m = enc.max_hp as f32;
-    let h = enc.current_hp as f32;
+    let m = (enc.max_hp as f32).max(1.0);
+    let h = (enc.current_hp as f32).clamp(1.0, m);
     let hp_factor = (3.0 * m - 2.0 * h) / (3.0 * m);
     let berry_mult = if enc.razz_fed { 1.5 } else { 1.0 };
     hp_factor * (base_rate as f32) * ball.multiplier() * berry_mult
@@ -68,10 +68,9 @@ fn record_capture(state: &mut TrainerState, enc: Encounter, ball: BallType) -> R
 }
 
 /// Handles failed catch shake mechanics and flee chances.
-fn resolve_breakout(state: &mut TrainerState, mut enc: Encounter) -> Result<CatchOutcome, String> {
+fn resolve_breakout(state: &mut TrainerState, mut enc: Encounter, shakes: u8) -> Result<CatchOutcome, String> {
     let fled = !enc.razz_fed && (rand::random_range(0..100) < 25);
     enc.razz_fed = false;
-    let shakes = rand::random_range(0..3);
 
     if fled {
         let name = enc.name.clone();
@@ -88,6 +87,24 @@ fn resolve_breakout(state: &mut TrainerState, mut enc: Encounter) -> Result<Catc
     }
 }
 
+/// Simulates the 4 shake checks to test capture success.
+fn roll_catch_shakes(ball: BallType, score: f32) -> (bool, u8) {
+    if ball == BallType::Master || score >= 255.0 {
+        return (true, 4);
+    }
+    let b = 65536.0 / (255.0 / score.max(1.0)).powf(0.1875);
+    let b_val = b.clamp(1.0, 65535.0) as u32;
+    let mut passed = 0;
+    for _ in 0..4 {
+        if rand::random_range(0..65536) < b_val {
+            passed += 1;
+        } else {
+            break;
+        }
+    }
+    (passed == 4, passed)
+}
+
 /// Executes a ball throw against the currently active encounter.
 pub fn attempt_catch(state: &mut TrainerState, ball: BallType) -> Result<CatchOutcome, String> {
     let enc = state
@@ -102,19 +119,12 @@ pub fn attempt_catch(state: &mut TrainerState, ball: BallType) -> Result<CatchOu
     let species = species::find_by_query(&enc.slug);
     let base_rate = species.map(|s| s.catch_rate).unwrap_or(45);
     let score = calculate_catch_rate(&enc, ball, base_rate);
-
-    let caught = if ball == BallType::Master || score >= 255.0 {
-        true
-    } else {
-        let b = 65536.0 / (255.0 / score).powf(0.1875);
-        let b_val = b.clamp(1.0, 65535.0) as u32;
-        (0..4).all(|_| rand::random_range(0..65536) < b_val)
-    };
+    let (caught, shakes) = roll_catch_shakes(ball, score);
 
     if caught {
         record_capture(state, enc, ball)
     } else {
-        resolve_breakout(state, enc)
+        resolve_breakout(state, enc, shakes)
     }
 }
 

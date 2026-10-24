@@ -43,12 +43,18 @@ fn handle_catch(ball_str: &str) {
         }
         Ok(CatchOutcome::Escaped { shakes, slug }) => {
             let dots = "*shake* ... ".repeat(shakes as usize);
-            println!("{}\nOh no! The wild {} broke free!", dots.trim(), slug);
+            if !dots.is_empty() {
+                println!("{}", dots.trim());
+            }
+            println!("Oh no! The wild {} broke free!", slug);
             println!("Use 'poke catch' to try again or 'poke berry'.");
         }
         Ok(CatchOutcome::Fled { shakes, name }) => {
             let dots = "*shake* ... ".repeat(shakes as usize);
-            println!("{}\nOh no! {} fled into the tall grass!", dots.trim(), name);
+            if !dots.is_empty() {
+                println!("{}", dots.trim());
+            }
+            println!("Oh no! {} fled into the tall grass!", name);
         }
         Err(err) => eprintln!("{}", err),
     }
