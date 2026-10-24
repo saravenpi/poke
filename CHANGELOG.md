@@ -6,6 +6,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-10-24
+
+### Changed
+
+- `poke`: running with no arguments displays the help message instead of spawning an encounter.
+
 ## [0.1.0] - 2026-10-24
 
 ### Added
