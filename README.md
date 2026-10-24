@@ -32,7 +32,8 @@ Each new terminal session rolls a wild encounter using authentic game apparition
 
 | Command | Description |
 |---|---|
-| `poke` / `poke spawn` | Display or roll the current wild encounter |
+| `poke` | Display help and available commands |
+| `poke spawn` | Display or roll the current wild encounter |
 | `poke spawn --force` | Force roll a new encounter immediately |
 | `poke catch [ball]` | Throw a ball (`poke`, `great`, `ultra`, `master`) |
 | `poke berry` | Feed a Razz Berry (+50% catch rate, stops flee for 1 turn) |

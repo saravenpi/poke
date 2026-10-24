@@ -1,4 +1,4 @@
-use clap::Parser;
+use clap::{CommandFactory, Parser};
 use poke::catch::{self, CatchOutcome};
 use poke::cli::{Cli, Commands};
 use poke::daily;
@@ -112,7 +112,10 @@ fn main() {
     match cli.command {
         None => match cli.pokemon {
             Some(name) => handle_direct_display(&name, cli.shiny),
-            None => handle_spawn(false, None),
+            None => {
+                let _ = Cli::command().print_help();
+                println!();
+            }
         },
         Some(Commands::Spawn { force, gen }) => handle_spawn(force, gen),
         Some(Commands::Catch { ball }) => handle_catch(&ball),
