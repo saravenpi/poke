@@ -72,7 +72,7 @@ pub fn play(attempt: &Attempt, config: &Config) {
         }
         End::Escaped => {
             println!("Oh no! {} broke free!", name);
-            println!("Use 'poke catch' to try again or 'poke berry'.");
+            println!("Use 'poke catch [ball]' to try again or 'poke berry'.");
         }
         End::Fled => println!("Oh no! {} broke free and fled into the tall grass!", name),
     }

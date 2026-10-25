@@ -47,6 +47,7 @@ pub fn format_bag(state: &TrainerState) -> String {
         "Shiny Charm",
         if inv.shiny_charm { "active" } else { "none" }
     ));
+    out.push_str("\n\nUse 'poke catch [ball]' (e.g. 'poke catch ultra') during an encounter.");
     out
 }
 

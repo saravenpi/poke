@@ -65,8 +65,9 @@ pub fn format_encounter(enc: &Encounter, lang: Language) -> String {
         Some(s) => format!("[{}]", s.type1),
         None => String::new(),
     };
+    let prompt = "Use 'poke catch [ball]' to throw (e.g. 'poke catch ultra'), or 'poke run'.";
     format!(
-        "A wild {}{} (Lv. {}) appeared! {}\nUse 'poke catch' to throw a Poké Ball, or 'poke run'.",
-        lang::pokemon_name(enc.species_id, lang), shiny_tag, enc.level, type_info
+        "A wild {}{} (Lv. {}) appeared! {}\n{}",
+        lang::pokemon_name(enc.species_id, lang), shiny_tag, enc.level, type_info, prompt
     )
 }

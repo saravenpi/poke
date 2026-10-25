@@ -30,10 +30,16 @@ pub enum Commands {
         gen: Option<u8>,
     },
 
-    /// Throw a Poké Ball to catch the wild Pokemon.
+    /// Throw a ball to catch the wild Pokemon (e.g. 'poke catch ultra').
+    #[command(after_help = concat!(
+        "Examples:\n",
+        "  poke catch          Throw a standard Poké Ball\n",
+        "  poke catch great    Throw a Great Ball\n",
+        "  poke catch ultra    Throw an Ultra Ball"
+    ))]
     Catch {
         /// Ball to throw: poke, great, ultra, master, net, nest, repeat, quick, or timer.
-        #[arg(default_value = "poke")]
+        #[arg(default_value = "poke", value_name = "BALL")]
         ball: String,
     },
 
@@ -52,7 +58,12 @@ pub enum Commands {
     /// Browse items and balls in the Poké Mart.
     Shop,
 
-    /// Purchase items from the shop.
+    /// Purchase items from the shop (e.g. 'poke buy ultra 5').
+    #[command(after_help = concat!(
+        "Examples:\n",
+        "  poke buy ultra 5    Buy 5 Ultra Balls\n",
+        "  poke buy berry      Buy 1 Razz Berry"
+    ))]
     Buy {
         /// Item to buy: any ball keyword, berry, or charm.
         item: String,

@@ -26,3 +26,26 @@ fn test_localized_names() {
     let cfg: Config = serde_yaml_ng::from_str("language: french").unwrap();
     assert_eq!(cfg.language, Language::French);
 }
+
+/// Encounter formatting guides the player on catch syntax including balls.
+#[test]
+fn test_encounter_prompt_mentions_ball_syntax() {
+    use poke::encounter::format_encounter;
+    use poke::lang::Language;
+    use poke::models::Encounter;
+
+    let enc = Encounter {
+        species_id: 1,
+        name: "Bulbasaur".into(),
+        slug: "bulbasaur".into(),
+        level: 5,
+        max_hp: 20,
+        current_hp: 20,
+        shiny: false,
+        spawned_at: 0,
+        razz_fed: false,
+        turns: 0,
+    };
+    let formatted = format_encounter(&enc, Language::English);
+    assert!(formatted.contains("poke catch [ball]"));
+}
