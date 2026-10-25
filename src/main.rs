@@ -1,22 +1,15 @@
 use clap::{CommandFactory, Parser};
-use poke::catch::{self, CatchOutcome};
+use poke::anim;
+use poke::ball::BallType;
+use poke::catch;
+use poke::config::{self, Config};
 use poke::cli::{Cli, Commands};
 use poke::daily;
 use poke::dex;
 use poke::encounter;
-use poke::models::{BallType, TrainerState};
+use poke::models::TrainerState;
 use poke::sprites;
 use poke::storage;
-
-/// Resolves user ball input string to typed BallType enum.
-fn parse_ball(raw: &str) -> BallType {
-    match raw.to_lowercase().as_str() {
-        "great" | "greatball" | "blue" => BallType::Great,
-        "ultra" | "ultraball" | "yellow" => BallType::Ultra,
-        "master" | "masterball" | "purple" => BallType::Master,
-        _ => BallType::Poke,
-    }
-}
 
 /// Handles spawning and printing wild encounter to terminal.
 fn handle_spawn(force: bool, gen: Option<u8>) {
@@ -24,39 +17,38 @@ fn handle_spawn(force: bool, gen: Option<u8>) {
     if let Some(daily_msg) = daily::check_daily(&mut state) {
         println!("{}\n", daily_msg);
     }
-    let enc = encounter::get_or_spawn_encounter(&mut state, force, gen);
-    if let Some(sprite) = sprites::render_sprite(&enc.slug, enc.shiny) {
-        println!("{}", sprite);
-    }
-    println!("{}", encounter::format_encounter(&enc));
-}
-
-/// Executes a Poké Ball throw against the active wild Pokemon.
-fn handle_catch(ball_str: &str) {
-    let mut state = storage::load_state();
-    let ball = parse_ball(ball_str);
-    match catch::attempt_catch(&mut state, ball) {
-        Ok(CatchOutcome::Caught { pokemon, reward }) => {
-            println!("*shake* ... *shake* ... *shake* ... *click*!");
-            println!("Gotcha! {} was caught!", pokemon.name);
-            println!("+{} ₽ earned. Added to Pokédex!", reward);
-        }
-        Ok(CatchOutcome::Escaped { shakes, slug }) => {
-            let dots = "*shake* ... ".repeat(shakes as usize);
-            if !dots.is_empty() {
-                println!("{}", dots.trim());
+    match encounter::get_or_spawn_encounter(&mut state, &config::load_config(), force, gen) {
+        Ok(enc) => {
+            if let Some(sprite) = sprites::render_sprite(&enc.slug, enc.shiny) {
+                println!("{}", sprite);
             }
-            println!("Oh no! The wild {} broke free!", slug);
-            println!("Use 'poke catch' to try again or 'poke berry'.");
-        }
-        Ok(CatchOutcome::Fled { shakes, name }) => {
-            let dots = "*shake* ... ".repeat(shakes as usize);
-            if !dots.is_empty() {
-                println!("{}", dots.trim());
-            }
-            println!("Oh no! {} fled into the tall grass!", name);
+            println!("{}", encounter::format_encounter(&enc));
         }
         Err(err) => eprintln!("{}", err),
+    }
+}
+
+/// Throws a ball at the active wild Pokemon and plays the result.
+fn handle_catch(ball_str: &str) {
+    let Some(ball) = BallType::parse(ball_str) else {
+        eprintln!("Unknown ball '{}'. Run 'poke shop' to see them all.", ball_str);
+        return;
+    };
+    match catch::attempt_catch(&mut storage::load_state(), ball) {
+        Ok(attempt) => anim::play(&attempt, config::load_config().animation),
+        Err(err) => eprintln!("{}", err),
+    }
+}
+
+/// Prints the effective settings and config file locations.
+fn handle_config(config: &Config) {
+    let limit = config.generation_limit().map_or_else(|e| e, |g| format!("1-{}", g));
+    println!("Generation limit:  {}", limit);
+    println!("Animation:         {}", config.animation);
+    println!("Encounter timeout: {}s", config.encounter_timeout_secs);
+    println!("Config files (first found wins):");
+    for path in config::config_paths() {
+        println!("  {}", path.display());
     }
 }
 
@@ -84,6 +76,7 @@ fn handle_dex(query: Option<String>, state: &TrainerState) {
 fn dispatch_trainer(cmd: Commands) {
     let mut state = storage::load_state();
     match cmd {
+        Commands::Config => handle_config(&config::load_config()),
         Commands::Bag => println!("{}", poke::bag::format_bag(&state)),
         Commands::Shop => println!("{}", poke::bag::format_shop(&state)),
         Commands::Buy { item, quantity } => match poke::bag::buy_item(&mut state, &item, quantity) {

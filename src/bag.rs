@@ -1,86 +1,90 @@
-use crate::models::{BallType, Inventory, TrainerState};
+use crate::ball::{BallType, ALL_BALLS};
+use crate::models::TrainerState;
 use crate::storage;
+
+const BERRY_PRICE: u32 = 300;
+const CHARM_PRICE: u32 = 25_000;
+
+/// Something the Poké Mart sells.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Item {
+    Ball(BallType),
+    Berry,
+    Charm,
+}
+
+impl Item {
+    /// Resolves a shop keyword to an item.
+    pub fn parse(raw: &str) -> Option<Self> {
+        match raw.trim().to_lowercase().as_str() {
+            "berry" | "razz" => Some(Self::Berry),
+            "charm" | "shinycharm" => Some(Self::Charm),
+            other => BallType::parse(other).map(Self::Ball),
+        }
+    }
+
+    /// Unit price in Pokédollars.
+    pub fn price(self) -> u32 {
+        match self {
+            Self::Ball(ball) => ball.price(),
+            Self::Berry => BERRY_PRICE,
+            Self::Charm => CHARM_PRICE,
+        }
+    }
+}
 
 /// Formats current wallet and inventory contents.
 pub fn format_bag(state: &TrainerState) -> String {
     let inv = &state.inventory;
-    let charm_status = if inv.shiny_charm { "Active" } else { "None" };
-    format!(
-        "=== Trainer Bag ===\n\
-         Wallet: {} ₽\n\n\
-         Poké Balls:\n  \
-           ⚪ Poké Ball:    {}\n  \
-           🔵 Great Ball:   {}\n  \
-           🟡 Ultra Ball:   {}\n  \
-           🟣 Master Ball:  {}\n\n\
-         Items:\n  \
-           🍓 Razz Berry:   {}\n  \
-           ✨ Shiny Charm:  {}",
-        state.pokedollars,
-        inv.poke_balls,
-        inv.great_balls,
-        inv.ultra_balls,
-        inv.master_balls,
+    let mut out = format!("=== Trainer Bag ===\nWallet: {} ₽\n\nBalls:\n", state.pokedollars);
+    for ball in ALL_BALLS.iter().filter(|b| inv.count(**b) > 0) {
+        out.push_str(&format!("  {:<12} x{}\n", ball.name(), inv.count(*ball)));
+    }
+    out.push_str(&format!(
+        "\nItems:\n  {:<12} x{}\n  {:<12} {}",
+        "Razz Berry",
         inv.razz_berries,
-        charm_status
-    )
+        "Shiny Charm",
+        if inv.shiny_charm { "active" } else { "none" }
+    ));
+    out
 }
 
 /// Formats the shop catalogue and prices.
 pub fn format_shop(state: &TrainerState) -> String {
-    format!(
-        "=== Poké Mart ===\n\
-         Wallet: {} ₽\n\n\
-         Items for sale:\n  \
-           poke    - Poké Ball     (200 ₽)   - Standard capture rate\n  \
-           great   - Great Ball    (600 ₽)   - 1.5x capture rate\n  \
-           ultra   - Ultra Ball    (1,200 ₽) - 2.0x capture rate\n  \
-           master  - Master Ball   (50,000 ₽)- 100% guaranteed catch\n  \
-           berry   - Razz Berry    (300 ₽)   - Calms Pokemon & +50% catch rate\n  \
-           charm   - Shiny Charm   (25,000 ₽)- Quadruples shiny spawn chances\n\n\
-         Use 'poke buy <item> [quantity]' to purchase.",
-        state.pokedollars
-    )
-}
-
-/// Helper to add purchased quantity to trainer inventory.
-fn apply_purchase(inv: &mut Inventory, item: &str, count: u32) {
-    match item.to_lowercase().as_str() {
-        "poke" | "pokeball" => inv.poke_balls += count,
-        "great" | "greatball" => inv.great_balls += count,
-        "ultra" | "ultraball" => inv.ultra_balls += count,
-        "master" | "masterball" => inv.master_balls += count,
-        "berry" | "razz" => inv.razz_berries += count,
-        "charm" | "shinycharm" => inv.shiny_charm = true,
-        _ => {}
+    let mut out = format!("=== Poké Mart ===\nWallet: {} ₽\n\n", state.pokedollars);
+    for ball in ALL_BALLS {
+        out.push_str(&format!("  {:<7} {:<12} {:>6} ₽  {}\n", ball.key(), ball.name(), ball.price(), ball.blurb()));
     }
+    let extras = [
+        ("berry", "Razz Berry", BERRY_PRICE, "+50% catch rate, no fleeing for one throw"),
+        ("charm", "Shiny Charm", CHARM_PRICE, "shiny odds x4"),
+    ];
+    for (key, name, price, blurb) in extras {
+        out.push_str(&format!("  {:<7} {:<12} {:>6} ₽  {}\n", key, name, price, blurb));
+    }
+    out.push_str("\nUse 'poke buy <item> [quantity]' to purchase.");
+    out
 }
 
 /// Purchases an item from the shop if funds are sufficient.
-pub fn buy_item(state: &mut TrainerState, item: &str, qty: u32) -> Result<String, String> {
-    let count = qty.max(1);
-    let unit_price = match item.to_lowercase().as_str() {
-        "poke" | "pokeball" => BallType::Poke.price(),
-        "great" | "greatball" => BallType::Great.price(),
-        "ultra" | "ultraball" => BallType::Ultra.price(),
-        "master" | "masterball" => BallType::Master.price(),
-        "berry" | "razz" => 300,
-        "charm" | "shinycharm" => {
-            if state.inventory.shiny_charm {
-                return Err("You already own the Shiny Charm!".to_string());
-            }
-            25000
-        }
-        _ => return Err(format!("Unknown shop item: '{}'. Run 'poke shop'.", item)),
-    };
-
-    let total = unit_price * count;
+pub fn buy_item(state: &mut TrainerState, raw: &str, qty: u32) -> Result<String, String> {
+    let item = Item::parse(raw).ok_or_else(|| format!("Unknown shop item: '{}'. Run 'poke shop'.", raw))?;
+    if item == Item::Charm && state.inventory.shiny_charm {
+        return Err("You already own the Shiny Charm!".to_string());
+    }
+    let count = if item == Item::Charm { 1 } else { qty.max(1) };
+    let total = item.price().saturating_mul(count);
     if state.pokedollars < total {
         return Err(format!("Not enough Poké Dollars! Need {} ₽, have {} ₽.", total, state.pokedollars));
     }
 
     state.pokedollars -= total;
-    apply_purchase(&mut state.inventory, item, count);
-    storage::save_state(state).map_err(|e| e.to_string())?;
-    Ok(format!("Purchased {}x {} for {} ₽!", count, item, total))
+    match item {
+        Item::Ball(ball) => state.inventory.add(ball, count),
+        Item::Berry => state.inventory.razz_berries = state.inventory.razz_berries.saturating_add(count),
+        Item::Charm => state.inventory.shiny_charm = true,
+    }
+    storage::save_state(state)?;
+    Ok(format!("Purchased {}x {} for {} ₽!", count, raw.trim(), total))
 }

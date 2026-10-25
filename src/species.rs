@@ -1,7 +1,7 @@
 use std::io::Cursor;
 use std::sync::OnceLock;
 
-use crate::models::Species;
+use crate::models::{Species, LATEST_GEN};
 
 static SPECIES_CACHE: OnceLock<Vec<Species>> = OnceLock::new();
 
@@ -46,20 +46,30 @@ pub fn find_by_query(query: &str) -> Option<&'static Species> {
         .find(|s| s.slug == lower || s.name.to_lowercase() == lower)
 }
 
-/// Selects a wild Pokemon using authentic apparition weights.
-pub fn roll_encounter(gen_filter: Option<u8>) -> &'static Species {
-    let pool: Vec<&Species> = match gen_filter {
-        Some(g) => all_species().iter().filter(|s| s.gen == g).collect(),
-        None => all_species().iter().collect(),
-    };
+/// Resolves a generation number (1-8) or region name (`unova`) to a generation.
+pub fn parse_generation(raw: &str) -> Option<u8> {
+    let norm = raw.trim().to_lowercase();
+    let by_region = ["kanto", "johto", "hoenn", "sinnoh", "unova", "kalos", "alola", "galar"]
+        .iter()
+        .position(|r| *r == norm)
+        .map(|i| i as u8 + 1);
+    by_region.or_else(|| norm.parse().ok()).filter(|g| (1..=LATEST_GEN).contains(g))
+}
+
+/// Selects a wild Pokemon by apparition weight, up to `max_gen` (or exactly `only_gen`).
+pub fn roll_encounter(max_gen: u8, only_gen: Option<u8>) -> Option<&'static Species> {
+    let pool: Vec<&Species> = all_species()
+        .iter()
+        .filter(|s| s.gen <= max_gen && only_gen.is_none_or(|g| s.gen == g))
+        .collect();
     let total_weight: u32 = pool.iter().map(|s| s.weight).sum();
-    let roll = rand::random_range(0..total_weight);
-    let mut acc = 0;
-    for species in &pool {
-        acc += species.weight;
-        if roll < acc {
-            return species;
-        }
+    if total_weight == 0 {
+        return None;
     }
-    pool.first().copied().unwrap_or(&all_species()[0])
+    let mut roll = rand::random_range(0..total_weight);
+    pool.into_iter().find(|s| {
+        let hit = roll < s.weight;
+        roll = roll.saturating_sub(s.weight);
+        hit
+    })
 }

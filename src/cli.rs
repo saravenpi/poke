@@ -25,14 +25,14 @@ pub enum Commands {
         #[arg(short, long, default_value_t = false)]
         force: bool,
 
-        /// Limit random encounter to a specific generation (1-8).
-        #[arg(short, long)]
+        /// Roll only this generation (1-8), within your generation limit.
+        #[arg(short, long, value_parser = clap::value_parser!(u8).range(1..=8))]
         gen: Option<u8>,
     },
 
     /// Throw a Poké Ball to catch the wild Pokemon.
     Catch {
-        /// Ball type to throw: poke, great, ultra, or master.
+        /// Ball to throw: poke, great, ultra, master, net, nest, repeat, quick, or timer.
         #[arg(default_value = "poke")]
         ball: String,
     },
@@ -43,6 +43,9 @@ pub enum Commands {
     /// Flee from the wild Pokemon.
     Run,
 
+    /// Show the active settings and where the config file lives.
+    Config,
+
     /// Inspect your trainer wallet and bag inventory.
     Bag,
 
@@ -51,7 +54,7 @@ pub enum Commands {
 
     /// Purchase items from the shop.
     Buy {
-        /// Item to buy: poke, great, ultra, master, berry, charm.
+        /// Item to buy: any ball keyword, berry, or charm.
         item: String,
 
         /// Number of items to buy.

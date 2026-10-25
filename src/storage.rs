@@ -10,17 +10,16 @@ pub fn state_file_path() -> PathBuf {
     base.join("poke").join("state.json")
 }
 
-/// Loads the trainer state from disk or initializes defaults.
+/// Loads the trainer state, keeping a `.bak` copy of any save it cannot parse.
 pub fn load_state() -> TrainerState {
     let path = state_file_path();
-    if !path.exists() {
+    let Ok(content) = fs::read_to_string(&path) else {
         return TrainerState::default();
-    }
-    let content = match fs::read_to_string(&path) {
-        Ok(c) => c,
-        Err(_) => return TrainerState::default(),
     };
-    serde_json::from_str(&content).unwrap_or_default()
+    serde_json::from_str(&content).unwrap_or_else(|_| {
+        let _ = fs::copy(&path, path.with_extension("json.bak"));
+        TrainerState::default()
+    })
 }
 
 /// Saves the current trainer state to disk.

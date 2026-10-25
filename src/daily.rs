@@ -1,48 +1,38 @@
-use std::time::{SystemTime, UNIX_EPOCH};
-
+use crate::econ::{self, DAILY_MILESTONES, DAILY_POKE_BALLS};
 use crate::models::TrainerState;
+use crate::storage;
 
 /// Returns the current day index since epoch to compute day deltas safely.
 pub fn current_day_number() -> u64 {
-    let secs = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs();
-    secs / 86400
+    storage::current_epoch_secs() / 86400
 }
 
-/// Checks and awards daily login bonus if not claimed today.
+/// Checks and awards the daily login bonus if not claimed today.
 pub fn check_daily(state: &mut TrainerState) -> Option<String> {
-    let today = current_day_number().to_string();
-    if state.last_daily == today {
+    let today = current_day_number();
+    let prev: u64 = state.last_daily.parse().unwrap_or(0);
+    if prev == today {
         return None;
     }
 
-    let prev_day: u64 = state.last_daily.parse().unwrap_or(0);
-    let curr_day: u64 = current_day_number();
+    state.streak = if prev + 1 == today { state.streak + 1 } else { 1 };
+    state.last_daily = today.to_string();
 
-    if curr_day == prev_day + 1 {
-        state.streak += 1;
-    } else {
-        state.streak = 1;
-    }
-    state.last_daily = today;
+    let cash = econ::daily_cash(state.streak);
+    state.pokedollars = state.pokedollars.saturating_add(cash);
+    state.inventory.add(crate::ball::BallType::Poke, DAILY_POKE_BALLS);
 
-    let base_reward = 250 + (state.streak * 25);
-    state.pokedollars += base_reward;
-    state.inventory.poke_balls += 5;
-
-    let mut bonus_note = String::new();
-    if state.streak % 7 == 0 {
-        state.inventory.ultra_balls += 1;
-        bonus_note = " +1 Ultra Ball!".to_string();
-    } else if state.streak % 3 == 0 {
-        state.inventory.great_balls += 2;
-        bonus_note = " +2 Great Balls!".to_string();
-    }
+    let bonus: String = DAILY_MILESTONES
+        .iter()
+        .filter(|(period, _, _)| state.streak.is_multiple_of(*period))
+        .map(|(_, ball, count)| {
+            state.inventory.add(*ball, *count);
+            format!(" +{} {}{}!", count, ball.name(), if *count > 1 { "s" } else { "" })
+        })
+        .collect();
 
     Some(format!(
-        "Daily bonus claimed: +{} ₽, +5 Poké Balls!{} (Streak: {} days)",
-        base_reward, bonus_note, state.streak
+        "Daily bonus claimed: +{} ₽, +{} Poké Balls!{} (Streak: {} days)",
+        cash, DAILY_POKE_BALLS, bonus, state.streak
     ))
 }

@@ -1,5 +1,10 @@
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
+
+use crate::ball::BallType;
+
+/// Newest generation available in the sprite and species data.
+pub const LATEST_GEN: u8 = 8;
 
 /// Metadata for a single Pokemon species.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -16,47 +21,6 @@ pub struct Species {
     pub weight: u32,
 }
 
-/// Supported Poke Ball types and multipliers.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum BallType {
-    Poke,
-    Great,
-    Ultra,
-    Master,
-}
-
-impl BallType {
-    /// Returns multiplier for catch formula.
-    pub fn multiplier(self) -> f32 {
-        match self {
-            Self::Poke => 1.0,
-            Self::Great => 1.5,
-            Self::Ultra => 2.0,
-            Self::Master => 255.0,
-        }
-    }
-
-    /// Returns display name of ball.
-    pub fn name(self) -> &'static str {
-        match self {
-            Self::Poke => "Poké Ball",
-            Self::Great => "Great Ball",
-            Self::Ultra => "Ultra Ball",
-            Self::Master => "Master Ball",
-        }
-    }
-
-    /// Returns price in shop.
-    pub fn price(self) -> u32 {
-        match self {
-            Self::Poke => 200,
-            Self::Great => 600,
-            Self::Ultra => 1200,
-            Self::Master => 50000,
-        }
-    }
-}
-
 /// Represents an ongoing wild encounter.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Encounter {
@@ -69,6 +33,8 @@ pub struct Encounter {
     pub shiny: bool,
     pub spawned_at: u64,
     pub razz_fed: bool,
+    #[serde(default)]
+    pub turns: u32,
 }
 
 /// An individual captured Pokemon.
@@ -84,13 +50,11 @@ pub struct CapturedPokemon {
     pub ball_used: String,
 }
 
-/// Trainer inventory for balls, berries, and badges.
+/// Trainer inventory for balls, berries, and charms.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct Inventory {
-    pub poke_balls: u32,
-    pub great_balls: u32,
-    pub ultra_balls: u32,
-    pub master_balls: u32,
+    pub balls: BTreeMap<BallType, u32>,
     pub razz_berries: u32,
     pub shiny_charm: bool,
 }
@@ -98,18 +62,40 @@ pub struct Inventory {
 impl Default for Inventory {
     fn default() -> Self {
         Self {
-            poke_balls: 15,
-            great_balls: 5,
-            ultra_balls: 1,
-            master_balls: 0,
+            balls: BTreeMap::from([(BallType::Poke, 15), (BallType::Great, 5), (BallType::Ultra, 1)]),
             razz_berries: 3,
             shiny_charm: false,
         }
     }
 }
 
+impl Inventory {
+    /// Number of balls of one type in the bag.
+    pub fn count(&self, ball: BallType) -> u32 {
+        self.balls.get(&ball).copied().unwrap_or(0)
+    }
+
+    /// Adds balls to the bag.
+    pub fn add(&mut self, ball: BallType, qty: u32) {
+        let slot = self.balls.entry(ball).or_insert(0);
+        *slot = slot.saturating_add(qty);
+    }
+
+    /// Removes one ball, returning false when none are left.
+    pub fn take(&mut self, ball: BallType) -> bool {
+        match self.balls.get_mut(&ball) {
+            Some(n) if *n > 0 => {
+                *n -= 1;
+                true
+            }
+            _ => false,
+        }
+    }
+}
+
 /// Complete trainer profile and save data.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct TrainerState {
     pub pokedollars: u32,
     pub inventory: Inventory,

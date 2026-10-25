@@ -1,157 +1,107 @@
-use crate::models::{BallType, CapturedPokemon, Encounter, Inventory, TrainerState};
+use crate::ball::BallType;
+use crate::capture::{self, Throw};
+use crate::econ;
+use crate::models::{CapturedPokemon, Encounter, Species, TrainerState};
 use crate::species;
 use crate::storage;
 
-/// Outcome of a catch attempt.
+const FLEE_PERCENT: u32 = 25;
+
+/// How a throw ended.
 #[derive(Debug)]
-pub enum CatchOutcome {
+pub enum End {
     Caught {
         pokemon: CapturedPokemon,
         reward: u32,
+        new_entry: bool,
     },
-    Escaped {
-        shakes: u8,
-        slug: String,
-    },
-    Fled {
-        shakes: u8,
-        name: String,
-    },
+    Escaped,
+    Fled,
 }
 
-/// Consumes one ball of the given type from inventory.
-pub fn consume_ball(inv: &mut Inventory, ball: BallType) -> bool {
-    let slot = match ball {
-        BallType::Poke => &mut inv.poke_balls,
-        BallType::Great => &mut inv.great_balls,
-        BallType::Ultra => &mut inv.ultra_balls,
-        BallType::Master => &mut inv.master_balls,
-    };
-    if *slot == 0 {
-        return false;
-    }
-    *slot -= 1;
-    true
+/// Full record of one ball throw, used to animate and report it.
+#[derive(Debug)]
+pub struct Attempt {
+    pub ball: BallType,
+    pub name: String,
+    pub throw: Throw,
+    pub end: End,
 }
 
-/// Computes the catch chance score using the authentic capture formula.
-pub fn calculate_catch_rate(enc: &Encounter, ball: BallType, base_rate: u16) -> f32 {
-    let m = (enc.max_hp as f32).max(1.0);
-    let h = (enc.current_hp as f32).clamp(1.0, m);
-    let hp_factor = (3.0 * m - 2.0 * h) / (3.0 * m);
-    let berry_mult = if enc.razz_fed { 1.5 } else { 1.0 };
-    hp_factor * (base_rate as f32) * ball.multiplier() * berry_mult
-}
-
-/// Finalizes capture state and awards payout.
-fn record_capture(state: &mut TrainerState, enc: Encounter, ball: BallType) -> Result<CatchOutcome, String> {
-    let reward = 100 + (enc.level as u32 * 10) + if enc.shiny { 5000 } else { 0 };
-    state.pokedollars += reward;
+/// Finalizes a capture and awards the payout.
+fn record_capture(state: &mut TrainerState, enc: Encounter, species: &Species, ball: BallType) -> Result<End, String> {
+    let new_entry = !state.caught.contains_key(&enc.species_id);
+    let reward = econ::capture_reward(species.catch_rate, enc.level, enc.shiny, new_entry);
+    state.pokedollars = state.pokedollars.saturating_add(reward);
     *state.caught.entry(enc.species_id).or_insert(0) += 1;
-    let captured = CapturedPokemon {
-        uuid: format!("{}-{}", storage::current_epoch_secs(), enc.species_id),
+    let now = storage::current_epoch_secs();
+    let pokemon = CapturedPokemon {
+        uuid: format!("{}-{}-{}", now, enc.species_id, state.storage_box.len()),
         species_id: enc.species_id,
-        name: enc.name.clone(),
-        slug: enc.slug.clone(),
+        name: enc.name,
+        slug: enc.slug,
         level: enc.level,
         shiny: enc.shiny,
-        caught_at: storage::current_epoch_secs(),
+        caught_at: now,
         ball_used: ball.name().to_string(),
     };
-    state.storage_box.push(captured.clone());
+    state.storage_box.push(pokemon.clone());
     state.active_encounter = None;
-    storage::save_state(state).map_err(|e| e.to_string())?;
-    Ok(CatchOutcome::Caught {
-        pokemon: captured,
-        reward,
-    })
+    storage::save_state(state)?;
+    Ok(End::Caught { pokemon, reward, new_entry })
 }
 
-/// Handles failed catch shake mechanics and flee chances.
-fn resolve_breakout(state: &mut TrainerState, mut enc: Encounter, shakes: u8) -> Result<CatchOutcome, String> {
-    let fled = !enc.razz_fed && (rand::random_range(0..100) < 25);
+/// Handles a failed throw: the Pokémon may flee, unless a berry calmed it.
+fn resolve_breakout(state: &mut TrainerState, mut enc: Encounter) -> Result<End, String> {
+    let fled = !enc.razz_fed && rand::random_range(0..100) < FLEE_PERCENT;
     enc.razz_fed = false;
-
-    if fled {
-        let name = enc.name.clone();
-        state.active_encounter = None;
-        storage::save_state(state).map_err(|e| e.to_string())?;
-        Ok(CatchOutcome::Fled { shakes, name })
-    } else {
-        state.active_encounter = Some(enc.clone());
-        storage::save_state(state).map_err(|e| e.to_string())?;
-        Ok(CatchOutcome::Escaped {
-            shakes,
-            slug: enc.slug,
-        })
-    }
-}
-
-/// Simulates the 4 shake checks to test capture success.
-fn roll_catch_shakes(ball: BallType, score: f32) -> (bool, u8) {
-    if ball == BallType::Master || score >= 255.0 {
-        return (true, 4);
-    }
-    let b = 65536.0 / (255.0 / score.max(1.0)).powf(0.1875);
-    let b_val = b.clamp(1.0, 65535.0) as u32;
-    let mut passed = 0;
-    for _ in 0..4 {
-        if rand::random_range(0..65536) < b_val {
-            passed += 1;
-        } else {
-            break;
-        }
-    }
-    (passed == 4, passed)
+    enc.turns += 1;
+    state.active_encounter = if fled { None } else { Some(enc) };
+    storage::save_state(state)?;
+    Ok(if fled { End::Fled } else { End::Escaped })
 }
 
 /// Executes a ball throw against the currently active encounter.
-pub fn attempt_catch(state: &mut TrainerState, ball: BallType) -> Result<CatchOutcome, String> {
+pub fn attempt_catch(state: &mut TrainerState, ball: BallType) -> Result<Attempt, String> {
     let enc = state
         .active_encounter
         .clone()
-        .ok_or_else(|| "No active wild Pokemon nearby. Run 'poke spawn' first!".to_string())?;
-
-    if !consume_ball(&mut state.inventory, ball) {
+        .ok_or("No active wild Pokemon nearby. Run 'poke spawn' first!")?;
+    let species = species::find_by_query(&enc.slug).ok_or("Unknown species in save data. Run 'poke run'.")?;
+    if !state.inventory.take(ball) {
         return Err(format!("You have no {}s left! Visit 'poke shop'.", ball.name()));
     }
 
-    let species = species::find_by_query(&enc.slug);
-    let base_rate = species.map(|s| s.catch_rate).unwrap_or(45);
-    let score = calculate_catch_rate(&enc, ball, base_rate);
-    let (caught, shakes) = roll_catch_shakes(ball, score);
-
-    if caught {
-        record_capture(state, enc, ball)
+    let owned = state.caught.contains_key(&enc.species_id);
+    let x = capture::catch_value(&enc, species, ball, owned);
+    let throw = capture::roll_throw(ball, x, state.caught.len());
+    let name = enc.name.clone();
+    let end = if throw.caught {
+        record_capture(state, enc, species, ball)?
     } else {
-        resolve_breakout(state, enc, shakes)
-    }
+        resolve_breakout(state, enc)?
+    };
+    Ok(Attempt { ball, name, throw, end })
 }
 
 /// Feeds a Razz Berry to calm the wild Pokemon.
 pub fn feed_berry(state: &mut TrainerState) -> Result<String, String> {
-    let mut enc = state
-        .active_encounter
-        .clone()
-        .ok_or_else(|| "No active wild Pokemon to feed.".to_string())?;
-
+    let enc = state.active_encounter.as_mut().ok_or("No active wild Pokemon to feed.")?;
     if state.inventory.razz_berries == 0 {
         return Err("You have no Razz Berries left! Visit 'poke shop'.".to_string());
     }
     state.inventory.razz_berries -= 1;
     enc.razz_fed = true;
     let name = enc.name.clone();
-    state.active_encounter = Some(enc);
-    storage::save_state(state).map_err(|e| e.to_string())?;
-    Ok(format!("Fed a Razz Berry to {}! Catch chance increased.", name))
+    storage::save_state(state)?;
+    Ok(format!("Fed a Razz Berry to {}! It is calmer: catch chance x1.5, no fleeing next throw.", name))
 }
 
 /// Flees from the active encounter.
 pub fn flee(state: &mut TrainerState) -> Result<String, String> {
-    if state.active_encounter.is_none() {
+    if state.active_encounter.take().is_none() {
         return Err("No active encounter to flee from.".to_string());
     }
-    state.active_encounter = None;
-    storage::save_state(state).map_err(|e| e.to_string())?;
+    storage::save_state(state)?;
     Ok("Got away safely!".to_string())
 }

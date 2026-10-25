@@ -1,3 +1,5 @@
+use crate::ball::BallType;
+use crate::econ;
 use crate::models::TrainerState;
 use crate::species;
 use crate::sprites;
@@ -86,9 +88,9 @@ pub fn release_pokemon(state: &mut TrainerState, index: usize) -> Result<String,
         return Err(format!("Invalid box index. Valid range: 1..{}", state.storage_box.len()));
     }
     let removed = state.storage_box.remove(index - 1);
-    let reward = 50 + (removed.level as u32 * 10) + if removed.shiny { 1000 } else { 0 };
-    state.pokedollars += reward;
-    storage::save_state(state).map_err(|e| e.to_string())?;
+    let reward = econ::release_reward(removed.level, removed.shiny);
+    state.pokedollars = state.pokedollars.saturating_add(reward);
+    storage::save_state(state)?;
     Ok(format!(
         "Sent {} (Lv. {}) to Professor Oak. Received {} ₽!",
         removed.name, removed.level, reward
@@ -99,11 +101,12 @@ pub fn release_pokemon(state: &mut TrainerState, index: usize) -> Result<String,
 pub fn status_line(state: &TrainerState) -> String {
     let inv = &state.inventory;
     format!(
-        "{} ₽ | ⚪{} 🔵{} 🟡{} | Dex: {}/905",
+        "{} ₽ | ⚪{} 🔵{} 🟡{} | Dex: {}/{}",
         state.pokedollars,
-        inv.poke_balls,
-        inv.great_balls,
-        inv.ultra_balls,
-        state.caught.len()
+        inv.count(BallType::Poke),
+        inv.count(BallType::Great),
+        inv.count(BallType::Ultra),
+        state.caught.len(),
+        species::all_species().len()
     )
 }

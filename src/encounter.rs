@@ -1,18 +1,12 @@
+use crate::config::Config;
 use crate::models::{Encounter, Species, TrainerState};
 use crate::species;
 use crate::storage;
 
-const ENCOUNTER_TIMEOUT_SECS: u64 = 600;
-
-/// Determines if an encounter should be shiny based on base rates and charm.
-pub fn is_shiny(charm: bool) -> bool {
-    if let Ok(val) = std::env::var("POKE_SHINY_RATE") {
-        if let Ok(rate) = val.parse::<u32>() {
-            return 0 == rand::random_range(0..rate.max(1));
-        }
-    }
-    let denominator = if charm { 1024 } else { 4096 };
-    0 == rand::random_range(0..denominator)
+/// Determines if an encounter should be shiny: 1/4096, 1/1024 with the charm, or a configured 1/`rate`.
+pub fn is_shiny(charm: bool, rate_override: Option<u32>) -> bool {
+    let denominator = rate_override.unwrap_or(if charm { 1024 } else { 4096 });
+    rand::random_range(0..denominator.max(1)) == 0
 }
 
 /// Calculates max HP from base HP and level using official formula.
@@ -22,7 +16,7 @@ pub fn calculate_hp(base_hp: u16, level: u8) -> u16 {
 }
 
 /// Creates a new fresh encounter instance for a given species.
-pub fn create_encounter(species: &Species, charm: bool) -> Encounter {
+pub fn create_encounter(species: &Species, charm: bool, shiny_rate: Option<u32>) -> Encounter {
     let level = rand::random_range(3..=45);
     let max_hp = calculate_hp(species.base_hp, level);
     Encounter {
@@ -32,29 +26,34 @@ pub fn create_encounter(species: &Species, charm: bool) -> Encounter {
         level,
         max_hp,
         current_hp: max_hp,
-        shiny: is_shiny(charm),
+        shiny: is_shiny(charm, shiny_rate),
         spawned_at: storage::current_epoch_secs(),
         razz_fed: false,
+        turns: 0,
     }
 }
 
-/// Retrieves active encounter or rolls a new one if expired or forced.
-pub fn get_or_spawn_encounter(state: &mut TrainerState, force: bool, gen: Option<u8>) -> Encounter {
+/// Retrieves the active encounter or rolls a new one if expired or forced.
+pub fn get_or_spawn_encounter(
+    state: &mut TrainerState,
+    config: &Config,
+    force: bool,
+    only_gen: Option<u8>,
+) -> Result<Encounter, String> {
     let now = storage::current_epoch_secs();
-    if !force {
-        if let Some(ref active) = state.active_encounter {
-            if now.saturating_sub(active.spawned_at) < ENCOUNTER_TIMEOUT_SECS {
-                return active.clone();
-            }
-        }
+    let fresh = |a: &&Encounter| now.saturating_sub(a.spawned_at) < config.encounter_timeout_secs;
+    if let Some(active) = state.active_encounter.as_ref().filter(|a| !force && fresh(a)) {
+        return Ok(active.clone());
     }
 
-    let species = species::roll_encounter(gen);
-    let encounter = create_encounter(species, state.inventory.shiny_charm);
+    let max_gen = config.generation_limit()?;
+    let species = species::roll_encounter(max_gen, only_gen)
+        .ok_or_else(|| format!("No Pokemon of that generation within your limit (gen 1-{}).", max_gen))?;
+    let encounter = create_encounter(species, state.inventory.shiny_charm, config.shiny_rate);
     state.active_encounter = Some(encounter.clone());
     *state.seen.entry(species.id).or_insert(0) += 1;
-    let _ = storage::save_state(state);
-    encounter
+    storage::save_state(state)?;
+    Ok(encounter)
 }
 
 /// Formats encounter description for display in terminal.
