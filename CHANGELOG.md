@@ -6,7 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-## [0.2.2] - 2026-10-25
+## [0.2.3] - 2026-10-25
+
+### Fixed
+
+- Clarified ball argument syntax in `poke catch [ball]` CLI help, encounter prompts, and bag view so players know how to use Great Balls, Ultra Balls, and other balls.
 
 ### Removed
 
