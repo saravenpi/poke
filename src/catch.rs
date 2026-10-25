@@ -1,6 +1,7 @@
 use crate::ball::BallType;
 use crate::capture::{self, Throw};
 use crate::econ;
+use crate::lang::{self, Language};
 use crate::models::{CapturedPokemon, Encounter, Species, TrainerState};
 use crate::species;
 use crate::storage;
@@ -23,7 +24,7 @@ pub enum End {
 #[derive(Debug)]
 pub struct Attempt {
     pub ball: BallType,
-    pub name: String,
+    pub species_id: usize,
     pub throw: Throw,
     pub end: End,
 }
@@ -75,24 +76,24 @@ pub fn attempt_catch(state: &mut TrainerState, ball: BallType) -> Result<Attempt
     let owned = state.caught.contains_key(&enc.species_id);
     let x = capture::catch_value(&enc, species, ball, owned);
     let throw = capture::roll_throw(ball, x, state.caught.len());
-    let name = enc.name.clone();
+    let species_id = enc.species_id;
     let end = if throw.caught {
         record_capture(state, enc, species, ball)?
     } else {
         resolve_breakout(state, enc)?
     };
-    Ok(Attempt { ball, name, throw, end })
+    Ok(Attempt { ball, species_id, throw, end })
 }
 
 /// Feeds a Razz Berry to calm the wild Pokemon.
-pub fn feed_berry(state: &mut TrainerState) -> Result<String, String> {
+pub fn feed_berry(state: &mut TrainerState, lang: Language) -> Result<String, String> {
     let enc = state.active_encounter.as_mut().ok_or("No active wild Pokemon to feed.")?;
     if state.inventory.razz_berries == 0 {
         return Err("You have no Razz Berries left! Visit 'poke shop'.".to_string());
     }
     state.inventory.razz_berries -= 1;
     enc.razz_fed = true;
-    let name = enc.name.clone();
+    let name = lang::pokemon_name(enc.species_id, lang);
     storage::save_state(state)?;
     Ok(format!("Fed a Razz Berry to {}! It is calmer: catch chance x1.5, no fleeing next throw.", name))
 }

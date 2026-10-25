@@ -27,10 +27,10 @@ id,name,slug,gen,type1,type2,catch_rate,base_hp,rarity,weight
 26,Raichu,raichu,1,Electric,,75,60,Rare,18
 27,Sandshrew,sandshrew,1,Ground,,255,50,Common,100
 28,Sandslash,sandslash,1,Ground,,90,75,Uncommon,45
-29,Nidoran-M,nidoran-m,1,Poison,,235,55,Common,100
+29,Nidoran-F,nidoran-f,1,Poison,,235,55,Common,100
 30,Nidorina,nidorina,1,Poison,,120,70,Uncommon,45
 31,Nidoqueen,nidoqueen,1,Poison,Ground,45,90,Rare,18
-32,Nidoran-F,nidoran-f,1,Poison,,235,46,Common,100
+32,Nidoran-M,nidoran-m,1,Poison,,235,46,Common,100
 33,Nidorino,nidorino,1,Poison,,120,61,Uncommon,45
 34,Nidoking,nidoking,1,Poison,Ground,45,81,Rare,18
 35,Clefairy,clefairy,1,Fairy,,150,70,Uncommon,45

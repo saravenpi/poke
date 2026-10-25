@@ -1,6 +1,7 @@
 use std::io::Cursor;
 use std::sync::OnceLock;
 
+use crate::lang;
 use crate::models::{Species, LATEST_GEN};
 
 static SPECIES_CACHE: OnceLock<Vec<Species>> = OnceLock::new();
@@ -34,7 +35,7 @@ pub fn all_species() -> &'static [Species] {
     })
 }
 
-/// Finds a species by ID or case-insensitive name/slug.
+/// Finds a species by ID or case-insensitive name/slug in any supported language.
 pub fn find_by_query(query: &str) -> Option<&'static Species> {
     let trimmed = query.trim();
     if let Ok(id) = trimmed.parse::<usize>() {
@@ -44,6 +45,7 @@ pub fn find_by_query(query: &str) -> Option<&'static Species> {
     all_species()
         .iter()
         .find(|s| s.slug == lower || s.name.to_lowercase() == lower)
+        .or_else(|| lang::find_id(trimmed).and_then(|id| all_species().iter().find(|s| s.id == id)))
 }
 
 /// Resolves a generation number (1-8) or region name (`unova`) to a generation.

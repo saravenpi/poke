@@ -11,6 +11,7 @@ pub mod daily;
 pub mod dex;
 pub mod econ;
 pub mod encounter;
+pub mod lang;
 pub mod models;
 pub mod species;
 pub mod sprites;

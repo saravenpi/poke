@@ -3,6 +3,8 @@ use std::thread::sleep;
 use std::time::Duration;
 
 use crate::ball::BallType;
+use crate::config::Config;
+use crate::lang;
 use crate::catch::{Attempt, End};
 
 const WOBBLE: [&str; 4] = ["◐", "◓", "◑", "◒"];
@@ -56,21 +58,22 @@ fn animate(attempt: &Attempt, enabled: bool) {
 }
 
 /// Animates a throw and prints how it ended.
-pub fn play(attempt: &Attempt, enabled: bool) {
+pub fn play(attempt: &Attempt, config: &Config) {
     println!("You threw a {}!", attempt.ball.name());
-    animate(attempt, enabled);
+    animate(attempt, config.animation);
+    let name = lang::pokemon_name(attempt.species_id, config.language);
     match &attempt.end {
-        End::Caught { pokemon, reward, new_entry } => {
-            println!("*click*! Gotcha! {} was caught!", pokemon.name);
+        End::Caught { reward, new_entry, .. } => {
+            println!("*click*! Gotcha! {} was caught!", name);
             if *new_entry {
-                println!("New Pokédex entry: {}!", pokemon.name);
+                println!("New Pokédex entry: {}!", name);
             }
             println!("+{} ₽ earned.", reward);
         }
         End::Escaped => {
-            println!("Oh no! {} broke free!", attempt.name);
+            println!("Oh no! {} broke free!", name);
             println!("Use 'poke catch' to try again or 'poke berry'.");
         }
-        End::Fled => println!("Oh no! {} broke free and fled into the tall grass!", attempt.name),
+        End::Fled => println!("Oh no! {} broke free and fled into the tall grass!", name),
     }
 }

@@ -1,4 +1,5 @@
 use crate::config::Config;
+use crate::lang::{self, Language};
 use crate::models::{Encounter, Species, TrainerState};
 use crate::species;
 use crate::storage;
@@ -57,7 +58,7 @@ pub fn get_or_spawn_encounter(
 }
 
 /// Formats encounter description for display in terminal.
-pub fn format_encounter(enc: &Encounter) -> String {
+pub fn format_encounter(enc: &Encounter, lang: Language) -> String {
     let shiny_tag = if enc.shiny { " ✨ SHINY ✨" } else { "" };
     let species = species::find_by_query(&enc.slug);
     let type_info = match species {
@@ -67,6 +68,6 @@ pub fn format_encounter(enc: &Encounter) -> String {
     };
     format!(
         "A wild {}{} (Lv. {}) appeared! {}\nUse 'poke catch' to throw a Poké Ball, or 'poke run'.",
-        enc.name, shiny_tag, enc.level, type_info
+        lang::pokemon_name(enc.species_id, lang), shiny_tag, enc.level, type_info
     )
 }

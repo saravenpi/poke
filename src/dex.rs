@@ -1,5 +1,6 @@
 use crate::ball::BallType;
 use crate::econ;
+use crate::lang::{self, Language};
 use crate::models::TrainerState;
 use crate::species;
 use crate::sprites;
@@ -30,7 +31,7 @@ pub fn dex_summary(state: &TrainerState) -> String {
 }
 
 /// Displays detailed Pokédex information and sprite for a specific Pokemon.
-pub fn inspect_pokemon(query: &str, state: &TrainerState) -> Result<String, String> {
+pub fn inspect_pokemon(query: &str, state: &TrainerState, lang: Language) -> Result<String, String> {
     let species = species::find_by_query(query)
         .ok_or_else(|| format!("Pokemon '{}' not found in National Dex.", query))?;
 
@@ -58,7 +59,7 @@ pub fn inspect_pokemon(query: &str, state: &TrainerState) -> Result<String, Stri
          Base HP:    {}\n\
          Seen:       {} times\n\
          Caught:     {} times",
-        sprite, species.id, species.name,
+        sprite, species.id, lang::pokemon_name(species.id, lang),
         type_str, species.rarity, species.gen,
         species.catch_rate, species.base_hp,
         seen, caught
@@ -66,7 +67,7 @@ pub fn inspect_pokemon(query: &str, state: &TrainerState) -> Result<String, Stri
 }
 
 /// Lists all Pokémon currently stored in the trainer box.
-pub fn list_box(state: &TrainerState) -> String {
+pub fn list_box(state: &TrainerState, lang: Language) -> String {
     if state.storage_box.is_empty() {
         return "Storage box is empty. Go catch some wild Pokémon!".to_string();
     }
@@ -75,7 +76,7 @@ pub fn list_box(state: &TrainerState) -> String {
         let shiny = if p.shiny { "✨ " } else { "" };
         out.push_str(&format!(
             "[{}] #{:03} {}{} (Lv. {}) - Caught with {}\n",
-            i + 1, p.species_id, shiny, p.name, p.level, p.ball_used
+            i + 1, p.species_id, shiny, lang::pokemon_name(p.species_id, lang), p.level, p.ball_used
         ));
     }
     out.push_str("\nUse 'poke release <number>' to send to Professor Oak for ₽.");
@@ -83,7 +84,7 @@ pub fn list_box(state: &TrainerState) -> String {
 }
 
 /// Releases a stored Pokémon in exchange for a cash reward.
-pub fn release_pokemon(state: &mut TrainerState, index: usize) -> Result<String, String> {
+pub fn release_pokemon(state: &mut TrainerState, index: usize, lang: Language) -> Result<String, String> {
     if index == 0 || index > state.storage_box.len() {
         return Err(format!("Invalid box index. Valid range: 1..{}", state.storage_box.len()));
     }
@@ -93,7 +94,7 @@ pub fn release_pokemon(state: &mut TrainerState, index: usize) -> Result<String,
     storage::save_state(state)?;
     Ok(format!(
         "Sent {} (Lv. {}) to Professor Oak. Received {} ₽!",
-        removed.name, removed.level, reward
+        lang::pokemon_name(removed.species_id, lang), removed.level, reward
     ))
 }
 
