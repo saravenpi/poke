@@ -6,6 +6,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-10-25
+
+### Removed
+
+- `shiny_rate` config setting. Shiny odds are fixed at 1/4096 (1/1024 with the Shiny Charm).
+
 ## [0.2.1] - 2026-10-25
 
 ### Added
