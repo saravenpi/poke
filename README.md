@@ -93,13 +93,12 @@ Throws follow the Generation 8 capture mechanics (https://dragonflycave.com/mech
 
 ## Configuration
 
-Settings live in `~/.config/poke/config.yml`, or `~/.poke.yml` if the first does not exist. Every key is optional. Unknown keys are rejected so typos show up as a warning.
+Settings live in `~/.config/poke/config.yml`, or `~/.poke.yml` if the first does not exist. Every key is optional. Game odds such as the shiny rate are not configurable. Unknown keys are rejected so typos show up as a warning.
 
 ```yaml
 language: en             # Pokémon names: en, ja, fr, es, de (full names like french also work)
 max_gen: unova            # 1-8 or a region: kanto johto hoenn sinnoh unova kalos alola galar
 animation: true           # shake animation on 'poke catch' (also skipped when output is piped)
-shiny_rate: 4096          # shiny odds as 1/N; omit for 4096 (1024 with the Shiny Charm)
 encounter_timeout_secs: 600
 ```
 

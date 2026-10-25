@@ -4,10 +4,9 @@ use crate::models::{Encounter, Species, TrainerState};
 use crate::species;
 use crate::storage;
 
-/// Determines if an encounter should be shiny: 1/4096, 1/1024 with the charm, or a configured 1/`rate`.
-pub fn is_shiny(charm: bool, rate_override: Option<u32>) -> bool {
-    let denominator = rate_override.unwrap_or(if charm { 1024 } else { 4096 });
-    rand::random_range(0..denominator.max(1)) == 0
+/// Determines if an encounter should be shiny: 1/4096, or 1/1024 with the Shiny Charm.
+pub fn is_shiny(charm: bool) -> bool {
+    rand::random_range(0..if charm { 1024 } else { 4096 }) == 0
 }
 
 /// Calculates max HP from base HP and level using official formula.
@@ -17,7 +16,7 @@ pub fn calculate_hp(base_hp: u16, level: u8) -> u16 {
 }
 
 /// Creates a new fresh encounter instance for a given species.
-pub fn create_encounter(species: &Species, charm: bool, shiny_rate: Option<u32>) -> Encounter {
+pub fn create_encounter(species: &Species, charm: bool) -> Encounter {
     let level = rand::random_range(3..=45);
     let max_hp = calculate_hp(species.base_hp, level);
     Encounter {
@@ -27,7 +26,7 @@ pub fn create_encounter(species: &Species, charm: bool, shiny_rate: Option<u32>)
         level,
         max_hp,
         current_hp: max_hp,
-        shiny: is_shiny(charm, shiny_rate),
+        shiny: is_shiny(charm),
         spawned_at: storage::current_epoch_secs(),
         razz_fed: false,
         turns: 0,
@@ -50,7 +49,7 @@ pub fn get_or_spawn_encounter(
     let max_gen = config.generation_limit()?;
     let species = species::roll_encounter(max_gen, only_gen)
         .ok_or_else(|| format!("No Pokemon of that generation within your limit (gen 1-{}).", max_gen))?;
-    let encounter = create_encounter(species, state.inventory.shiny_charm, config.shiny_rate);
+    let encounter = create_encounter(species, state.inventory.shiny_charm);
     state.active_encounter = Some(encounter.clone());
     *state.seen.entry(species.id).or_insert(0) += 1;
     storage::save_state(state)?;

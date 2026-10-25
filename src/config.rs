@@ -22,7 +22,6 @@ pub struct Config {
     pub max_gen: GenSetting,
     pub language: Language,
     pub animation: bool,
-    pub shiny_rate: Option<u32>,
     pub encounter_timeout_secs: u64,
 }
 
@@ -32,7 +31,6 @@ impl Default for Config {
             max_gen: GenSetting::Number(LATEST_GEN),
             language: Language::default(),
             animation: true,
-            shiny_rate: None,
             encounter_timeout_secs: 600,
         }
     }
