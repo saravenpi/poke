@@ -6,6 +6,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-10-25
+
+### Added
+
+- `language` config setting (`en`, `ja`, `fr`, `es`, `de`) for Pokémon names. Lookups accept names in any language.
+
+### Fixed
+
+- Nidoran #29 and #32 had swapped names (#29 is the female, #32 the male).
+
 ## [0.2.0] - 2026-10-25
 
 ### Added
